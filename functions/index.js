@@ -98,14 +98,33 @@ const signupUser = (req, res) => {
 		});
 };
 
+const isEmail = email => {
+	const re =
+		/^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+	return re.test(String(email).toLowerCase());
+};
+
+const isEmpty = string => {
+	if (string === '') return true;
+	else return false;
+};
+
 // refactoring signupUser using async await syntacs
 const signupUserAsync = async (req, res) => {
 	const newUser = {
-		email: req.body.email,
-		password: req.body.password,
-		confirmPassword: req.body.confirmPassword,
-		handle: req.body.handle,
+		email: req.body.email.trim(),
+		password: req.body.password.trim(),
+		confirmPassword: req.body.confirmPassword.trim(),
+		handle: req.body.handle.trim(),
 	};
+
+	let errors = {};
+
+	isEmpty(newUser.handle) && (errors.handle = 'handle must not be empty');
+
+	if (Object.keys(errors).length > 0) {
+		return res.status(400).json({ errors });
+	}
 
 	try {
 		const doc = await db.doc(`/users/${newUser.handle}`).get();
@@ -144,5 +163,40 @@ const signupUserAsync = async (req, res) => {
 };
 
 app.post('/signup', signupUserAsync);
+
+const login = async (req, res) => {
+	const user = {
+		email: req.body.email.trim(),
+		password: req.body.password.trim(),
+	};
+
+	let errors = {};
+
+	isEmpty(user.email) && (errors.email = 'email must not be empty');
+	isEmpty(user.password) && (errors.password = 'password must not be empty');
+
+	try {
+		const data = await firebase
+			.auth()
+			.signInWithEmailAndPassword(user.email, user.password);
+		const token = await data.user.getIdToken();
+
+		return res.json({ token });
+	} catch (error) {
+		console.error(error);
+		if (error.code === 'auth/user-not-found' || 'auth/wrong-password') {
+			return res.status(403).json({ general: 'Wrong credentials' });
+		}
+		return res.status(500).json({ error: error.code });
+	}
+
+	// const token = await data.getIdToken();
+};
+
+// if (Object.keys(errors).length > 0) {
+// 	return res.status(400).json(errors);
+// }
+
+app.post('/login', login);
 
 exports.api = functions.https.onRequest(app);
